@@ -18,6 +18,8 @@ int main()
 
     Vector2 *points = NULL;
     int pointCount = 0;
+    int *pointCountArr = NULL;
+    int pointCountArrIndex = 0;
 
 
     
@@ -52,10 +54,20 @@ int main()
 	DrawLine(worldTopLeft.x, 0, worldBottomRight.x, 0, ORANGE);
 	DrawLine(0, worldTopLeft.y, 0, worldBottomRight.y, ORANGE);
 
+	if(IsKeyDown(KEY_LEFT_CONTROL) && IsKeyDown(KEY_Z) && pointCountArrIndex > 0){
+	    pointCountArrIndex--;
+	    pointCount = pointCountArr[pointCountArrIndex - 1];
+    	    points = (Vector2*)realloc(points, pointCount * sizeof(Vector2));
+	    pointCountArr = (int*)realloc(pointCountArr, pointCountArrIndex * sizeof(int));
+	}
 	if(IsMouseButtonDown(MOUSE_BUTTON_LEFT)){
 	    points = (Vector2*)realloc(points, (pointCount + 1) * sizeof(Vector2));
 	    points[pointCount] = GetScreenToWorld2D(GetMousePosition(), camera);
 	    pointCount++;
+
+	    pointCountArr = (int*)realloc(pointCountArr, (pointCountArrIndex + 1) * sizeof(int));
+	    pointCountArr[pointCountArrIndex] = pointCount;
+	    pointCountArrIndex++;
 	}
 
 	DrawLineStrip(points, pointCount, GREEN);
@@ -78,6 +90,7 @@ int main()
     }
     
     free(points);
+    free(pointCountArr);
     pointCount = 0;
 
     CloseWindow();       
