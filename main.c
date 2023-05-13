@@ -64,7 +64,6 @@ int main()
 	DrawLine(worldTopLeft.x, 0, worldBottomRight.x, 0, ORANGE);
 	DrawLine(0, worldTopLeft.y, 0, worldBottomRight.y, ORANGE);
 
-	printf("%d \n", verticeCount_G);
 	if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
 	    verticeData_G = (Vector2*)realloc(verticeData_G, (verticeCount_G + 1) * sizeof(Vector2));
 	    verticeData_G[verticeCount_G] = GetScreenToWorld2D(GetMousePosition(), camera);
@@ -115,7 +114,7 @@ int main()
     Vertice *next_F;
     while(current_F != NULL){
 	next_F = current_F->next;
-	free(current_F->verticeData),
+	free(current_F->verticeData);
 	free(current_F);
 	current_F = next_F;
     }
