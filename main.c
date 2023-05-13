@@ -2,6 +2,7 @@
 #include <raymath.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <memory.h>
 
 int main()
 {
@@ -16,13 +17,22 @@ int main()
     const int CELL_SIZE = 50;
     const float ZOOM_INCREMENT = 0.125f;
 
-    Vector2 *points = NULL;
-    int pointCount = 0;
-    int *pointCountArr = NULL;
-    int pointCountArrIndex = 0;
+    typedef struct Vertice{
+	Vector2 *verticeData;
+	int verticeCount;
+	struct Vertice* next;
+    } Vertice;
 
+    Vertice *head = (Vertice*)malloc(sizeof(Vertice));
+    head->verticeData = NULL;
+    head->verticeCount = 0;
+    head->next = NULL;
 
-    
+    Vertice *current_D = (Vertice*)malloc(sizeof(Vertice));
+
+    Vector2 *verticeData_G = NULL; 
+    int verticeCount_G = 0;
+
     while (!WindowShouldClose()) {
 	BeginDrawing();
         ClearBackground(BLACK);
@@ -54,26 +64,39 @@ int main()
 	DrawLine(worldTopLeft.x, 0, worldBottomRight.x, 0, ORANGE);
 	DrawLine(0, worldTopLeft.y, 0, worldBottomRight.y, ORANGE);
 
-	if(IsKeyDown(KEY_LEFT_CONTROL) && IsKeyDown(KEY_Z) && pointCountArrIndex > 0){
-	    pointCountArrIndex--;
-	    pointCount = pointCountArr[pointCountArrIndex - 1];
-    	    points = (Vector2*)realloc(points, pointCount * sizeof(Vector2));
-	    pointCountArr = (int*)realloc(pointCountArr, pointCountArrIndex * sizeof(int));
+	printf("%d \n", verticeCount_G);
+	if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+	    verticeData_G = (Vector2*)realloc(verticeData_G, (verticeCount_G + 1) * sizeof(Vector2));
+	    verticeData_G[verticeCount_G] = GetScreenToWorld2D(GetMousePosition(), camera);
+	    verticeCount_G++;
 	}
-	if(IsMouseButtonDown(MOUSE_BUTTON_LEFT)){
-	    points = (Vector2*)realloc(points, (pointCount + 1) * sizeof(Vector2));
-	    points[pointCount] = GetScreenToWorld2D(GetMousePosition(), camera);
-	    pointCount++;
+	if(IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+            Vertice *current = head;
+	    while(current->next != NULL){
+		current = current->next;
+	    }
+	    current->next = (Vertice*)malloc(sizeof(Vertice));
+	    current->next->verticeData = (Vector2*)malloc(verticeCount_G * sizeof(Vector2));
+	    memcpy(current->next->verticeData, verticeData_G, verticeCount_G * sizeof(Vector2));
+	    current->next->verticeCount = verticeCount_G;
+	    current->next->next = NULL;
 
-	    pointCountArr = (int*)realloc(pointCountArr, (pointCountArrIndex + 1) * sizeof(int));
-	    pointCountArr[pointCountArrIndex] = pointCount;
-	    pointCountArrIndex++;
+	    verticeCount_G = 0;
 	}
-
-	DrawLineStrip(points, pointCount, GREEN);
+	/*if(IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_Z)){
+	}
+	if(IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_R)){
+	}*/
+	if(verticeData_G != NULL) DrawLineStrip(verticeData_G, verticeCount_G, GREEN);
+	if(head->next != NULL){
+	    current_D = head->next;
+	    while(current_D != NULL && current_D->verticeData != NULL){
+		DrawLineStrip(current_D->verticeData, current_D->verticeCount, GREEN);
+		current_D = current_D->next;
+	    }
+	}
 
 	EndDrawing();
-
     	if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)){
     	    Vector2 delta = GetMouseDelta();
 	    delta = Vector2Scale(delta, -1.0f/camera.zoom);
@@ -86,12 +109,17 @@ int main()
 	    if (camera.zoom > 1) camera.zoom = 1;
 	}
 
-
     }
-    
-    free(points);
-    free(pointCountArr);
-    pointCount = 0;
+
+    Vertice *current_F = head;
+    Vertice *next_F;
+    while(current_F != NULL){
+	next_F = current_F->next;
+	free(current_F->verticeData),
+	free(current_F);
+	current_F = next_F;
+    }
+    free(verticeData_G);
 
     CloseWindow();       
     return 0;
