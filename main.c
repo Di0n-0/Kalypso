@@ -29,6 +29,7 @@ int main()
     head->next = NULL;
 
     Vertice *current_D = (Vertice*)malloc(sizeof(Vertice));
+    Vertice *verticeIndex = head;
 
     Vector2 *verticeData_G = NULL; 
     int verticeCount_G = 0;
@@ -70,26 +71,32 @@ int main()
 	    verticeCount_G++;
 	}
 	if(IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-            Vertice *current = head;
-	    while(current->next != NULL){
-		current = current->next;
-	    }
-	    current->next = (Vertice*)malloc(sizeof(Vertice));
-	    current->next->verticeData = (Vector2*)malloc(verticeCount_G * sizeof(Vector2));
-	    memcpy(current->next->verticeData, verticeData_G, verticeCount_G * sizeof(Vector2));
-	    current->next->verticeCount = verticeCount_G;
-	    current->next->next = NULL;
+            Vertice *newVertice = (Vertice *)malloc(sizeof(Vertice));
+            newVertice->verticeData = (Vector2 *)malloc(verticeCount_G * sizeof(Vector2));
+            memcpy(newVertice->verticeData, verticeData_G, verticeCount_G * sizeof(Vector2));
+            newVertice->verticeCount = verticeCount_G;
+            newVertice->next = NULL;
+
+            verticeIndex->next = newVertice;
+            verticeIndex = newVertice;
 
 	    verticeCount_G = 0;
 	}
-	/*if(IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_Z)){
-	}
+	if(IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_Z)){
+	    if(verticeIndex != head){
+		Vertice *current = head;
+		while(current->next != verticeIndex) current = current->next;
+		verticeIndex = current;
+	    }
+    	}
 	if(IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_R)){
-	}*/
+	    if(verticeIndex->next != NULL) verticeIndex = verticeIndex->next;
+	}
+
 	if(verticeData_G != NULL) DrawLineStrip(verticeData_G, verticeCount_G, GREEN);
 	if(head->next != NULL){
 	    current_D = head->next;
-	    while(current_D != NULL && current_D->verticeData != NULL){
+	    while(current_D != verticeIndex->next){
 		DrawLineStrip(current_D->verticeData, current_D->verticeCount, GREEN);
 		current_D = current_D->next;
 	    }
