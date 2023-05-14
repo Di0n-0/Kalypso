@@ -75,7 +75,7 @@ int main()
             newVertice->verticeData = (Vector2 *)malloc(verticeCount_G * sizeof(Vector2));
             memcpy(newVertice->verticeData, verticeData_G, verticeCount_G * sizeof(Vector2));
             newVertice->verticeCount = verticeCount_G;
-            newVertice->next = NULL;
+            newVertice->next = verticeIndex->next;
 
             verticeIndex->next = newVertice;
             verticeIndex = newVertice;
