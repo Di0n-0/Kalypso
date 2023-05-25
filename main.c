@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
+#include <strings.h>
 
 int main()
 {
@@ -29,10 +30,6 @@ int main()
 	Vector2 start, end;
 	Color color;
     } IdenticalFunction;
-    typedef struct Point{
-	Vector2 pos;
-	Color color;
-    } Point;
 
     Vertice *head = (Vertice*)malloc(sizeof(Vertice));
     head->verticeData = NULL;
@@ -104,10 +101,11 @@ int main()
 	    if(verticeIndex->next != NULL) verticeIndex = verticeIndex->next;
 	}
 
-	if(verticeData_G != NULL) DrawLineStrip(verticeData_G, verticeCount_G, GREEN);
+	if(verticeData_G != NULL) DrawLineStrip(verticeData_G, verticeCount_G, GREEN); //for(int i = 0; i < verticeCount_G; i++) DrawCircleV(verticeData_G[i], 5, YELLOW);
 	if(head->next != NULL){
 	    current_D = head->next;
 	    while(current_D != verticeIndex->next){
+		//for(int i = 0; i < current_D->verticeCount; i++) DrawCircleV(current_D->verticeData[i], 5, YELLOW);
 		DrawLineStrip(current_D->verticeData, current_D->verticeCount, GREEN);
 		current_D = current_D->next;
 	    }
@@ -136,22 +134,25 @@ int main()
 	    }
 
 	    int collidingPointCount = 0;
-	    Point *collidingPoints = (Point*)realloc(collidingPoints, (collidingPointCount + 1) * sizeof(Point));
+	    Vector2 *collidingPoints = (Vector2*)realloc(collidingPoints, (collidingPointCount + 1) * sizeof(Vector2));
 	    Vertice *iterator = head;
-	    while(iterator != NULL){
-		for(int i = 0; i < iterator->verticeCount; i++){
-		    for(int j = 0; j < identicalFunctionCountX + identicalFunctionCountY; j++){
-			if(CheckCollisionPointLine(iterator->verticeData[i], identicalFunctions[j].start, identicalFunctions[j].end, 10)){
-			    collidingPoints[collidingPointCount] = (Point){.pos = iterator->verticeData[i], .color = BLUE};
-			    collidingPointCount++;
-			    collidingPoints = (Point*)realloc(collidingPoints, (collidingPointCount + 1) * sizeof(Point));
+
+	    while(iterator != verticeIndex->next){
+		if(iterator->verticeData != NULL){
+		    for(int i = 0; i < iterator->verticeCount - 1; i++){
+			for(int j = 0; j < identicalFunctionCountX + identicalFunctionCountY; j++){
+			    if(CheckCollisionLines(iterator->verticeData[i], iterator->verticeData[i+1], identicalFunctions[j].start, identicalFunctions[j].end, &collidingPoints[collidingPointCount])){
+				collidingPointCount++;
+				collidingPoints = (Vector2*)realloc(collidingPoints, (collidingPointCount + 1) * sizeof(Vector2));
+			    }
 			}
 		    }
 		}
 		iterator = iterator->next;
 	    }
+
 	    for(int i = 0; i < collidingPointCount; i++){
-		DrawCircleV(collidingPoints[i].pos, 5, collidingPoints[i].color);
+		DrawCircleV(collidingPoints[i], 5, BLUE);
 	    }
 
 	    static int delayTimer = 600; 
