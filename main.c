@@ -3,7 +3,51 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
-#include <strings.h>
+
+typedef struct Vertice{
+    Vector2 *verticeData;
+    int verticeCount;
+    struct Vertice* next;
+    Vector2 *intersectionPoints;
+    int intersectionPointCount;
+} Vertice;
+
+typedef struct IdenticalFunction{
+    Vector2 start, end;
+    Color color;
+} IdenticalFunction;
+
+typedef struct IFArray{
+    IdenticalFunction *identicalFunctions;
+    int identicalFunctionCount;
+} IFArray;
+
+
+IFArray* generateIdenticalFunctions(Vector2 worldTopLeft, Vector2 worldBottomRight){
+    const int IDENTICAL_FUNCTION_GAP = 50;
+    float identicalFunctionStartX = floorf(worldTopLeft.x / IDENTICAL_FUNCTION_GAP) * IDENTICAL_FUNCTION_GAP;
+    float identicalFunctionStartY = floorf(worldTopLeft.y / IDENTICAL_FUNCTION_GAP) * IDENTICAL_FUNCTION_GAP;
+    int identicalFunctionCountX = (worldBottomRight.x - worldTopLeft.x) / IDENTICAL_FUNCTION_GAP;
+    int identicalFunctionCountY = (worldBottomRight.y - worldTopLeft.y) / IDENTICAL_FUNCTION_GAP;
+
+    IdenticalFunction *identicalFunctions = (IdenticalFunction*)malloc((identicalFunctionCountX + identicalFunctionCountY) * sizeof(IdenticalFunction));
+    for(int i = 1; i < identicalFunctionCountX; i++){
+	float x  = identicalFunctionStartX + (i * IDENTICAL_FUNCTION_GAP);
+	IdenticalFunction identicalFunction = {.start = (Vector2){x, worldTopLeft.y}, .end = (Vector2){x, worldBottomRight.y}, .color = RED};
+	identicalFunctions[i -1] = identicalFunction;
+    }
+    for (int i = 1; i < identicalFunctionCountY; i++){
+	float y = identicalFunctionStartY + (i * IDENTICAL_FUNCTION_GAP);
+	IdenticalFunction identicalFunction = {.start = (Vector2){worldTopLeft.x, y}, .end = (Vector2){worldBottomRight.x, y}, .color = RED};
+	identicalFunctions[i-1 + identicalFunctionCountX] = identicalFunction;
+    }
+
+    IFArray *ifArray = (IFArray*)malloc(sizeof(IFArray));
+    ifArray->identicalFunctionCount = identicalFunctionCountX + identicalFunctionCountY;
+    ifArray->identicalFunctions = identicalFunctions;
+
+    return ifArray;
+}
 
 int main()
 {
@@ -20,27 +64,20 @@ int main()
 
     int algorithmStep = 0;
 
-    typedef struct Vertice{
-	Vector2 *verticeData;
-	int verticeCount;
-	struct Vertice* next;
-    } Vertice;
-
-    typedef struct IdenticalFunction{
-	Vector2 start, end;
-	Color color;
-    } IdenticalFunction;
-
     Vertice *head = (Vertice*)malloc(sizeof(Vertice));
     head->verticeData = NULL;
     head->verticeCount = 0;
     head->next = NULL;
+    head->intersectionPoints = NULL;
+    head->intersectionPointCount = 0;
 
     Vertice *current_D = (Vertice*)malloc(sizeof(Vertice));
     Vertice *verticeIndex = head;
 
     Vector2 *verticeData_G = NULL; 
     int verticeCount_G = 0;
+
+    IFArray *ifArray_D = NULL;
 
     while (!WindowShouldClose()) {
 	BeginDrawing();
@@ -84,11 +121,15 @@ int main()
             memcpy(newVertice->verticeData, verticeData_G, verticeCount_G * sizeof(Vector2));
             newVertice->verticeCount = verticeCount_G;
             newVertice->next = verticeIndex->next;
+	    newVertice->intersectionPoints = NULL;
+	    newVertice->intersectionPointCount = 0;
 
             verticeIndex->next = newVertice;
             verticeIndex = newVertice;
 
 	    verticeCount_G = 0;
+
+	    algorithmStep = 1;
 	}
 	if(IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_Z) && algorithmStep == 0){
 	    if(verticeIndex != head){
@@ -101,68 +142,51 @@ int main()
 	    if(verticeIndex->next != NULL) verticeIndex = verticeIndex->next;
 	}
 
+	if(algorithmStep == 2){
+	    for(int i = 0; i < ifArray_D->identicalFunctionCount; i++){
+		DrawLineV(ifArray_D->identicalFunctions[i].start, ifArray_D->identicalFunctions[i].end, ifArray_D->identicalFunctions[i].color);
+	    }
+	}
 	if(verticeData_G != NULL) DrawLineStrip(verticeData_G, verticeCount_G, GREEN); //for(int i = 0; i < verticeCount_G; i++) DrawCircleV(verticeData_G[i], 5, YELLOW);
 	if(head->next != NULL){
 	    current_D = head->next;
 	    while(current_D != verticeIndex->next){
 		//for(int i = 0; i < current_D->verticeCount; i++) DrawCircleV(current_D->verticeData[i], 5, YELLOW);
 		DrawLineStrip(current_D->verticeData, current_D->verticeCount, GREEN);
+
+		if(algorithmStep == 2) {
+		    for(int i = 0; i < current_D->intersectionPointCount; i++){
+			DrawCircleV(current_D->intersectionPoints[i], 5, BLUE);
+		    }
+		}
 		current_D = current_D->next;
 	    }
 	}
+	
 
 	if(algorithmStep == 1) {
-	    const int IDENTICAL_FUNCTION_GAP = 50;
-	    float identicalFunctionStartX = floorf(worldTopLeft.x / IDENTICAL_FUNCTION_GAP) * IDENTICAL_FUNCTION_GAP;
-	    float identicalFunctionStartY = floorf(worldTopLeft.y / IDENTICAL_FUNCTION_GAP) * IDENTICAL_FUNCTION_GAP;
-	    int identicalFunctionCountX = (worldBottomRight.x - worldTopLeft.x) / IDENTICAL_FUNCTION_GAP;
-	    int identicalFunctionCountY = (worldBottomRight.y - worldTopLeft.y) / IDENTICAL_FUNCTION_GAP;
-
-	    IdenticalFunction *identicalFunctions = (IdenticalFunction*)realloc(identicalFunctions, (identicalFunctionCountX + identicalFunctionCountY) * sizeof(IdenticalFunction));
-	    for(int i = 1; i < identicalFunctionCountX; i++){
-		float x  = identicalFunctionStartX + (i *IDENTICAL_FUNCTION_GAP);
-	   	IdenticalFunction identicalFunction = {.start = (Vector2){x, worldTopLeft.y}, .end = (Vector2){x, worldBottomRight.y}, .color = RED};
-		identicalFunctions[i -1] = identicalFunction;
-	    }
-	    for (int i = 1; i < identicalFunctionCountY; i++){
-		float y = identicalFunctionStartY + (i * IDENTICAL_FUNCTION_GAP);
-		IdenticalFunction identicalFunction = {.start = (Vector2){worldTopLeft.x, y}, .end = (Vector2){worldBottomRight.x, y}, .color = RED};
-		identicalFunctions[i-1 + identicalFunctionCountX] = identicalFunction;
-	    }
-	    for(int i = 0; i < identicalFunctionCountX + identicalFunctionCountY; i++){
-		DrawLineV(identicalFunctions[i].start, identicalFunctions[i].end, identicalFunctions[i].color);
-	    }
+	    IFArray *ifArray = generateIdenticalFunctions(worldTopLeft, worldBottomRight);
 
 	    int collidingPointCount = 0;
-	    Vector2 *collidingPoints = (Vector2*)realloc(collidingPoints, (collidingPointCount + 1) * sizeof(Vector2));
-	    Vertice *iterator = head;
+	    Vector2 *collidingPoints = (Vector2*)realloc(collidingPoints, (collidingPointCount + 1) * sizeof(Vector2)); 
 
-	    while(iterator != verticeIndex->next){
-		if(iterator->verticeData != NULL){
-		    for(int i = 0; i < iterator->verticeCount - 1; i++){
-			for(int j = 0; j < identicalFunctionCountX + identicalFunctionCountY; j++){
-			    if(CheckCollisionLines(iterator->verticeData[i], iterator->verticeData[i+1], identicalFunctions[j].start, identicalFunctions[j].end, &collidingPoints[collidingPointCount])){
-				collidingPointCount++;
-				collidingPoints = (Vector2*)realloc(collidingPoints, (collidingPointCount + 1) * sizeof(Vector2));
-			    }
-			}
+	    for(int i = 0; i < verticeIndex->verticeCount - 1; i++){
+		for(int j = 0; j < ifArray->identicalFunctionCount; j++){
+		    if(CheckCollisionLines(verticeIndex->verticeData[i], verticeIndex->verticeData[i+1], ifArray->identicalFunctions[j].start, ifArray->identicalFunctions[j].end, &collidingPoints[collidingPointCount])){
+			collidingPointCount++;
+			collidingPoints = (Vector2*)realloc(collidingPoints, (collidingPointCount + 1) * sizeof(Vector2));
 		    }
 		}
-		iterator = iterator->next;
 	    }
 
-	    for(int i = 0; i < collidingPointCount; i++){
-		DrawCircleV(collidingPoints[i], 5, BLUE);
-	    }
+	    verticeIndex->intersectionPoints = (Vector2*)malloc(collidingPointCount * sizeof(Vector2));
+	    memcpy(verticeIndex->intersectionPoints, collidingPoints, collidingPointCount * sizeof(Vector2));
+	    verticeIndex->intersectionPointCount = collidingPointCount;
 
-	    static int delayTimer = 600; 
-	    if (delayTimer <= 0) {
-		free(identicalFunctions);
-		free(collidingPoints);
-		algorithmStep++;
-	    } else {
-		delayTimer--;
-	    }
+	    free(ifArray->identicalFunctions);
+	    free(ifArray);
+
+	    algorithmStep = 0;
 	}
 
 	EndDrawing();
@@ -170,15 +194,18 @@ int main()
     	    Vector2 delta = GetMouseDelta();
 	    delta = Vector2Scale(delta, -1.0f/camera.zoom);
 	    camera.target = Vector2Add(camera.target, delta);
+	    ifArray_D = generateIdenticalFunctions(worldTopLeft, worldBottomRight);
 	}
 	float wheel = GetMouseWheelMove();
         if (wheel != 0){	    
 	    camera.zoom += (wheel*ZOOM_INCREMENT);
     	    if (camera.zoom < ZOOM_INCREMENT) camera.zoom = ZOOM_INCREMENT;
 	    if (camera.zoom > 1) camera.zoom = 1;
+	    ifArray_D = generateIdenticalFunctions(worldTopLeft, worldBottomRight);
 	}
-	if(IsKeyPressed(KEY_SPACE) && algorithmStep == 0){
-	    algorithmStep = 1; 
+	if(IsKeyPressed(KEY_SPACE)){
+	    ifArray_D = generateIdenticalFunctions(worldTopLeft, worldBottomRight);
+	    algorithmStep = 2;
 	}
 
     }
@@ -188,6 +215,7 @@ int main()
     while(current_F != NULL){
 	next_F = current_F->next;
 	free(current_F->verticeData);
+	free(current_F->intersectionPoints);
 	free(current_F);
 	current_F = next_F;
     }
@@ -196,5 +224,6 @@ int main()
     CloseWindow();       
     return 0;
 }
+
 
 
