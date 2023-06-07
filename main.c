@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
+#include <stdbool.h>
 
 typedef struct Vertice{
     Vector2 *verticeData;
@@ -21,6 +22,11 @@ typedef struct IFArray{
     IdenticalFunction *identicalFunctions;
     int identicalFunctionCount;
 } IFArray;
+
+typedef struct TextureBound{
+    Texture2D texture;
+    Rectangle rectangle;
+} TextureBound;
 
 
 IFArray* generateIdenticalFunctions(Vector2 worldTopLeft, Vector2 worldBottomRight){
@@ -62,8 +68,6 @@ int main()
     const int CELL_SIZE = 50;
     const float ZOOM_INCREMENT = 0.125f;
 
-    int algorithmStep = 0;
-
     Vertice *head = (Vertice*)malloc(sizeof(Vertice));
     head->verticeData = NULL;
     head->verticeCount = 0;
@@ -71,13 +75,22 @@ int main()
     head->intersectionPoints = NULL;
     head->intersectionPointCount = 0;
 
-    Vertice *current_D = (Vertice*)malloc(sizeof(Vertice));
+    Vertice *current_D = head;
     Vertice *verticeIndex = head;
 
     Vector2 *verticeData_G = NULL; 
     int verticeCount_G = 0;
 
     IFArray *ifArray_D = NULL;
+
+    Image HED_image = LoadImage("output_hed.png");
+    Texture2D HED_texture = LoadTextureFromImage(HED_image);
+    UnloadImage(HED_image);
+    TextureBound HED_bound = {.texture = HED_texture, .rectangle = (Rectangle){.x = 0 - HED_texture.width / 2.0f, .y = 0 - HED_texture.height / 2.0f, .width = HED_texture.width, .height = HED_texture.height}};
+
+    bool scaleImage = false;
+    bool moveImage = false;
+    const int SCALE_SIGN_SIZE = 50;
 
     while (!WindowShouldClose()) {
 	BeginDrawing();
@@ -93,6 +106,41 @@ int main()
 	
 	int cellCountVER = (worldBottomRight.x - worldTopLeft.x) / CELL_SIZE;
 	int cellCountHOR = (worldBottomRight.y - worldTopLeft.y) / CELL_SIZE;
+
+	DrawTextureV(HED_bound.texture, (Vector2){.x = HED_bound.rectangle.x, .y = HED_bound.rectangle.y}, WHITE);	
+	if(CheckCollisionPointRec(GetScreenToWorld2D(GetMousePosition(), camera), HED_bound.rectangle)) {
+	    DrawRectangleLinesEx(HED_bound.rectangle, 10.0f, LIME);
+	    Vector2 trinaglePointA = {.x = (HED_bound.rectangle.x + HED_bound.rectangle.width) - SCALE_SIGN_SIZE, .y = HED_bound.rectangle.y + HED_bound.rectangle.height};
+	    Vector2 trinaglePointB = {.x = (HED_bound.rectangle.x + HED_bound.rectangle.width), .y = HED_bound.rectangle.y + HED_bound.rectangle.height};
+	    Vector2 trinaglePointC = {.x = HED_bound.rectangle.x + HED_bound.rectangle.width, .y = (HED_bound.rectangle.y + HED_bound.rectangle.height) - SCALE_SIGN_SIZE};
+	    DrawTriangle(trinaglePointA, trinaglePointB, trinaglePointC, LIME);
+	    if(IsMouseButtonDown(MOUSE_BUTTON_LEFT) && IsKeyDown(KEY_LEFT_CONTROL)){
+		if(CheckCollisionPointTriangle(GetScreenToWorld2D(GetMousePosition(), camera), trinaglePointA, trinaglePointB, trinaglePointC)) scaleImage = true;
+		else moveImage = true;
+	    }
+	 }
+
+	if(scaleImage){
+	    HED_bound.rectangle.width = GetScreenToWorld2D(GetMousePosition(), camera).x - HED_bound.rectangle.x;
+	    HED_bound.rectangle.height = GetScreenToWorld2D(GetMousePosition(), camera).y - HED_bound.rectangle.y;
+
+	    if(HED_bound.rectangle.width < SCALE_SIGN_SIZE) HED_bound.rectangle.width = SCALE_SIGN_SIZE;
+	    if(HED_bound.rectangle.height < SCALE_SIGN_SIZE) HED_bound.rectangle.height = SCALE_SIGN_SIZE;
+
+	    if(HED_bound.rectangle.width > GetScreenWidth() - HED_bound.rectangle.x) HED_bound.rectangle.width = GetScreenWidth() - HED_bound.rectangle.x;
+	    if(HED_bound.rectangle.height > GetScreenHeight() - HED_bound.rectangle.y) HED_bound.rectangle.height = GetScreenHeight() - HED_bound.rectangle.y;
+
+	    HED_bound.texture.width = HED_bound.rectangle.width;
+	    HED_bound.texture.height = HED_bound.rectangle.height;
+	    if(IsMouseButtonReleased(MOUSE_BUTTON_LEFT) || IsKeyReleased(KEY_LEFT_CONTROL)) scaleImage = false;
+	}
+	if(moveImage && !scaleImage){
+    	    Vector2 delta = GetMouseDelta();
+	    delta = Vector2Scale(delta, -1.0f/camera.zoom);
+	    HED_bound.rectangle.x -= delta.x;
+	    HED_bound.rectangle.y -= delta.y;
+	    if(IsMouseButtonReleased(MOUSE_BUTTON_LEFT) || IsKeyReleased(KEY_LEFT_CONTROL)) moveImage = false;
+	}
 
        	for (int i = 1; i < cellCountVER; i++) {
 	    float x = gridStartX + (i * CELL_SIZE);
@@ -110,12 +158,12 @@ int main()
 	DrawLine(worldTopLeft.x, 0, worldBottomRight.x, 0, ORANGE);
 	DrawLine(0, worldTopLeft.y, 0, worldBottomRight.y, ORANGE);
 
-	if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && algorithmStep == 0) {
+	if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !scaleImage && !moveImage) {
 	    verticeData_G = (Vector2*)realloc(verticeData_G, (verticeCount_G + 1) * sizeof(Vector2));
 	    verticeData_G[verticeCount_G] = GetScreenToWorld2D(GetMousePosition(), camera);
 	    verticeCount_G++;
 	}
-	if(IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+	if(IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && !scaleImage && !moveImage) {
             Vertice *newVertice = (Vertice*)malloc(sizeof(Vertice));
             newVertice->verticeData = (Vector2*)malloc(verticeCount_G * sizeof(Vector2));
             memcpy(newVertice->verticeData, verticeData_G, verticeCount_G * sizeof(Vector2));
@@ -129,47 +177,9 @@ int main()
 
 	    verticeCount_G = 0;
 
-	    algorithmStep = 1;
-	}
-	if(IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_Z) && algorithmStep == 0){
-	    if(verticeIndex != head){
-		Vertice *current = head;
-		while(current->next != verticeIndex) current = current->next;
-		verticeIndex = current;
-	    }
-    	}
-	if(IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_R) && algorithmStep == 0){
-	    if(verticeIndex->next != NULL) verticeIndex = verticeIndex->next;
-	}
-
-	if(algorithmStep == 2){
-	    for(int i = 0; i < ifArray_D->identicalFunctionCount; i++){
-		DrawLineV(ifArray_D->identicalFunctions[i].start, ifArray_D->identicalFunctions[i].end, ifArray_D->identicalFunctions[i].color);
-	    }
-	}
-	if(verticeData_G != NULL) DrawLineStrip(verticeData_G, verticeCount_G, GREEN); //for(int i = 0; i < verticeCount_G; i++) DrawCircleV(verticeData_G[i], 5, YELLOW);
-	if(head->next != NULL){
-	    current_D = head->next;
-	    while(current_D != verticeIndex->next){
-		//for(int i = 0; i < current_D->verticeCount; i++) DrawCircleV(current_D->verticeData[i], 5, YELLOW);
-		DrawLineStrip(current_D->verticeData, current_D->verticeCount, GREEN);
-
-		if(algorithmStep == 2) {
-		    for(int i = 0; i < current_D->intersectionPointCount; i++){
-			DrawCircleV(current_D->intersectionPoints[i], 5, BLUE);
-		    }
-		}
-		current_D = current_D->next;
-	    }
-	}
-	
-
-	if(algorithmStep == 1) {
 	    IFArray *ifArray = generateIdenticalFunctions(worldTopLeft, worldBottomRight);
-
 	    int collidingPointCount = 0;
-	    Vector2 *collidingPoints = (Vector2*)realloc(collidingPoints, (collidingPointCount + 1) * sizeof(Vector2)); 
-
+	    Vector2* collidingPoints = (Vector2*)malloc(sizeof(Vector2));
 	    for(int i = 0; i < verticeIndex->verticeCount - 1; i++){
 		for(int j = 0; j < ifArray->identicalFunctionCount; j++){
 		    if(CheckCollisionLines(verticeIndex->verticeData[i], verticeIndex->verticeData[i+1], ifArray->identicalFunctions[j].start, ifArray->identicalFunctions[j].end, &collidingPoints[collidingPointCount])){
@@ -183,10 +193,40 @@ int main()
 	    memcpy(verticeIndex->intersectionPoints, collidingPoints, collidingPointCount * sizeof(Vector2));
 	    verticeIndex->intersectionPointCount = collidingPointCount;
 
+	    free(collidingPoints);
 	    free(ifArray->identicalFunctions);
 	    free(ifArray);
+	}
+	if(IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_Z)){
+	    if(verticeIndex != head){
+		Vertice *current = head;
+		while(current->next != verticeIndex) current = current->next;
+		verticeIndex = current;
+	    }
+    	}
+	if(IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_R)){
+	    if(verticeIndex->next != NULL) verticeIndex = verticeIndex->next;
+	}
 
-	    algorithmStep = 0;
+	if(IsKeyDown(KEY_SPACE)){
+	    for(int i = 0; i < ifArray_D->identicalFunctionCount; i++){
+		DrawLineV(ifArray_D->identicalFunctions[i].start, ifArray_D->identicalFunctions[i].end, ifArray_D->identicalFunctions[i].color);
+	    }
+	}
+	if(verticeData_G != NULL) DrawLineStrip(verticeData_G, verticeCount_G, GREEN); for(int i = 0; i < verticeCount_G; i++) DrawCircleV(verticeData_G[i], 5, YELLOW);
+	if(head->next != NULL){
+	    current_D = head->next;
+	    while(current_D != verticeIndex->next){
+		for(int i = 0; i < current_D->verticeCount; i++) DrawCircleV(current_D->verticeData[i], 5, YELLOW);
+		DrawLineStrip(current_D->verticeData, current_D->verticeCount, GREEN);
+
+		if(IsKeyDown(KEY_SPACE)) {
+		    for(int i = 0; i < current_D->intersectionPointCount; i++){
+			DrawCircleV(current_D->intersectionPoints[i], 5, BLUE);
+    		    }
+		}
+		current_D = current_D->next;
+	    }
 	}
 
 	EndDrawing();
@@ -194,6 +234,7 @@ int main()
     	    Vector2 delta = GetMouseDelta();
 	    delta = Vector2Scale(delta, -1.0f/camera.zoom);
 	    camera.target = Vector2Add(camera.target, delta);
+	    if(ifArray_D != NULL) free(ifArray_D->identicalFunctions); free(ifArray_D);
 	    ifArray_D = generateIdenticalFunctions(worldTopLeft, worldBottomRight);
 	}
 	float wheel = GetMouseWheelMove();
@@ -201,15 +242,19 @@ int main()
 	    camera.zoom += (wheel*ZOOM_INCREMENT);
     	    if (camera.zoom < ZOOM_INCREMENT) camera.zoom = ZOOM_INCREMENT;
 	    if (camera.zoom > 1) camera.zoom = 1;
+	    if(ifArray_D != NULL) free(ifArray_D->identicalFunctions); free(ifArray_D);
 	    ifArray_D = generateIdenticalFunctions(worldTopLeft, worldBottomRight);
 	}
 	if(IsKeyPressed(KEY_SPACE)){
+	    if(ifArray_D != NULL) free(ifArray_D->identicalFunctions); free(ifArray_D);
 	    ifArray_D = generateIdenticalFunctions(worldTopLeft, worldBottomRight);
-	    algorithmStep = 2;
 	}
 
     }
 
+    UnloadTexture(HED_texture);
+    free(ifArray_D->identicalFunctions);
+    free(ifArray_D);
     Vertice *current_F = head;
     Vertice *next_F;
     while(current_F != NULL){
