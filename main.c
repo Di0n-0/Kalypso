@@ -1,10 +1,11 @@
-//g++ -o main main.cpp -L/home/di0n/vcpkg/installed/x64-linux/lib -lraylib -lrlImGui -limgui -lm -lX11
+//gcc -o main main.cpp -L/home/di0n/vcpkg/installed/x64-linux/lib -lraylib -lm -lX11
 #include <raylib.h>
 #include <raymath.h>
 #include <memory.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <cjson/cJSON.h>
 
 typedef struct Vertice {
     Vector2 *verticeData;
@@ -29,21 +30,106 @@ typedef struct TextureBound {
     Rectangle rectangle;
 } TextureBound;
 
-IFArray *generateIdenticalFunctions(Vector2 worldTopLeft, Vector2 worldBottomRight) {
-    const int IDENTICAL_FUNCTION_GAP = 50;
-    float identicalFunctionStartX = floorf(worldTopLeft.x / IDENTICAL_FUNCTION_GAP) * IDENTICAL_FUNCTION_GAP;
-    float identicalFunctionStartY = floorf(worldTopLeft.y / IDENTICAL_FUNCTION_GAP) * IDENTICAL_FUNCTION_GAP;
-    int identicalFunctionCountX = (worldBottomRight.x - worldTopLeft.x) / IDENTICAL_FUNCTION_GAP;
-    int identicalFunctionCountY = (worldBottomRight.y - worldTopLeft.y) / IDENTICAL_FUNCTION_GAP;
+int readJSON(char **filePath, int* identicalFunctionGap){
+    FILE *file = fopen("settings.json", "r");
+    if (file == NULL) {
+        fprintf(stderr, "Failed to open JSON file.\n");
+        return 1;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long fileSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    char *jsonBuffer = (char *)malloc(fileSize + 1);
+    if (jsonBuffer == NULL) {
+        fprintf(stderr, "Memory allocation error.\n");
+        fclose(file);
+        return 1;
+    }
+
+    size_t bytesRead = fread(jsonBuffer, 1, fileSize, file);
+    jsonBuffer[bytesRead] = '\0';
+
+    fclose(file);
+
+    cJSON *root = cJSON_Parse(jsonBuffer);
+    if (root == NULL) {
+        fprintf(stderr, "Failed to parse JSON data.\n");
+        free(jsonBuffer);
+        return 1;
+    }
+
+    cJSON *filePathItem = cJSON_GetObjectItem(root, "filePath");
+    cJSON *identicalFunctionGapItem = cJSON_GetObjectItem(root, "identicalFunctionGap");
+
+    if (filePathItem && filePathItem->type == cJSON_String) {
+        *filePath = strdup(filePathItem->valuestring);
+    }
+
+    if (identicalFunctionGapItem && identicalFunctionGapItem->type == cJSON_Number) {
+        *identicalFunctionGap = identicalFunctionGapItem->valueint;
+    }
+
+    cJSON_Delete(root);
+    free(jsonBuffer);
+    return 0;
+}
+
+void loadImage(TextureBound *HED_bound, Camera2D *camera, bool *scaleImage, bool *moveImage){
+    const int SCALE_SIGN_SIZE = 50;
+    DrawTextureV(HED_bound->texture, (Vector2){.x = HED_bound->rectangle.x, .y = HED_bound->rectangle.y}, WHITE);
+    if (CheckCollisionPointRec(GetScreenToWorld2D(GetMousePosition(), *camera), HED_bound->rectangle)) {
+        DrawRectangleLinesEx(HED_bound->rectangle, 10.0f, LIME);
+        Vector2 trinaglePointA = {.x = (HED_bound->rectangle.x + HED_bound->rectangle.width) - SCALE_SIGN_SIZE, .y = HED_bound->rectangle.y + HED_bound->rectangle.height};
+        Vector2 trinaglePointB = {.x = (HED_bound->rectangle.x + HED_bound->rectangle.width), .y = HED_bound->rectangle.y + HED_bound->rectangle.height};
+        Vector2 trinaglePointC = {.x = HED_bound->rectangle.x + HED_bound->rectangle.width, .y = (HED_bound->rectangle.y + HED_bound->rectangle.height) - SCALE_SIGN_SIZE};
+        DrawTriangle(trinaglePointA, trinaglePointB, trinaglePointC, LIME);
+        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && IsKeyDown(KEY_LEFT_CONTROL)) {
+            if (CheckCollisionPointTriangle(GetScreenToWorld2D(GetMousePosition(), *camera), trinaglePointA, trinaglePointB, trinaglePointC))
+                *scaleImage = true;
+            else
+                *moveImage = true;
+        }
+    }
+
+    if (*scaleImage) {
+        HED_bound->rectangle.width = GetScreenToWorld2D(GetMousePosition(), *camera).x - HED_bound->rectangle.x;
+        HED_bound->rectangle.height = GetScreenToWorld2D(GetMousePosition(), *camera).y - HED_bound->rectangle.y;
+
+        if (HED_bound->rectangle.width < SCALE_SIGN_SIZE) HED_bound->rectangle.width = SCALE_SIGN_SIZE;
+        if (HED_bound->rectangle.height < SCALE_SIGN_SIZE) HED_bound->rectangle.height = SCALE_SIGN_SIZE;
+
+        if (HED_bound->rectangle.width > GetScreenWidth() - HED_bound->rectangle.x) HED_bound->rectangle.width = GetScreenWidth() - HED_bound->rectangle.x;
+        if (HED_bound->rectangle.height > GetScreenHeight() - HED_bound->rectangle.y) HED_bound->rectangle.height = GetScreenHeight() - HED_bound->rectangle.y;
+
+        HED_bound->texture.width = HED_bound->rectangle.width;
+        HED_bound->texture.height = HED_bound->rectangle.height;
+        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) || IsKeyReleased(KEY_LEFT_CONTROL)) *scaleImage = false;
+    }
+    if (*moveImage && !*scaleImage) {
+        Vector2 delta = GetMouseDelta();
+        delta = Vector2Scale(delta, -1.0f / camera->zoom);
+        HED_bound->rectangle.x -= delta.x;
+        HED_bound->rectangle.y -= delta.y;
+        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) || IsKeyReleased(KEY_LEFT_CONTROL)) *moveImage = false;
+    }
+}
+
+IFArray *generateIdenticalFunctions(Vector2 worldTopLeft, Vector2 worldBottomRight, int identicalFunctionGap) {
+    float identicalFunctionStartX = floorf(worldTopLeft.x / identicalFunctionGap) * identicalFunctionGap;
+    float identicalFunctionStartY = floorf(worldTopLeft.y / identicalFunctionGap) * identicalFunctionGap;
+    int identicalFunctionCountX = (worldBottomRight.x - worldTopLeft.x) / identicalFunctionGap;
+    int identicalFunctionCountY = (worldBottomRight.y - worldTopLeft.y) / identicalFunctionGap;
 
     IdenticalFunction *identicalFunctions = (IdenticalFunction *)malloc((identicalFunctionCountX + identicalFunctionCountY) * sizeof(IdenticalFunction));
     for (int i = 1; i < identicalFunctionCountX; i++) {
-        float x = identicalFunctionStartX + (i * IDENTICAL_FUNCTION_GAP);
+        float x = identicalFunctionStartX + (i * identicalFunctionGap);
         IdenticalFunction identicalFunction = {.start = (Vector2){x, worldTopLeft.y}, .end = (Vector2){x, worldBottomRight.y}, .color = RED};
         identicalFunctions[i - 1] = identicalFunction;
     }
     for (int i = 1; i < identicalFunctionCountY; i++) {
-        float y = identicalFunctionStartY + (i * IDENTICAL_FUNCTION_GAP);
+        float y = identicalFunctionStartY + (i * identicalFunctionGap);
         IdenticalFunction identicalFunction = {.start = (Vector2){worldTopLeft.x, y}, .end = (Vector2){worldBottomRight.x, y}, .color = RED};
         identicalFunctions[i - 1 + identicalFunctionCountX] = identicalFunction;
     }
@@ -81,17 +167,27 @@ int main(int argc, char **argv) {
     Vector2 *verticeData_G = NULL;
     int verticeCount_G = 0;
 
+    int identicalFunctionGap = 50;
     IFArray *ifArray_D = NULL;
 
-    Image HED_image = LoadImage("image.png");
-    Texture2D HED_texture = LoadTextureFromImage(HED_image);
-    UnloadImage(HED_image);
-    TextureBound HED_bound = {.texture = HED_texture, .rectangle = (Rectangle){.x = 0 - HED_texture.width / 2.0f, .y = 0 - HED_texture.height / 2.0f, .width = (float)HED_texture.width, .height = (float)HED_texture.height}};
-
+    char *fileLocation = NULL;
+    bool importImage = false;
     bool scaleImage = false;
     bool moveImage = false;
-    const int SCALE_SIGN_SIZE = 50;
+    TextureBound HED_bound;
+    Texture2D HED_texture;
 
+    if(readJSON(&fileLocation, &identicalFunctionGap) != 1){
+        Image HED_image = LoadImage(fileLocation);
+        free(fileLocation);
+        fileLocation = NULL;
+        HED_texture = LoadTextureFromImage(HED_image);
+        UnloadImage(HED_image);
+        HED_bound.texture = HED_texture; 
+        HED_bound.rectangle = (Rectangle){.x = 0 - HED_texture.width / 2.0f, .y = 0 - HED_texture.height / 2.0f, .width = (float)HED_texture.width, .height = (float)HED_texture.height};
+        importImage = true;
+    }
+    
     while (!WindowShouldClose()) {
         BeginDrawing();
         ClearBackground(BLACK);
@@ -107,42 +203,7 @@ int main(int argc, char **argv) {
         int cellCountVER = (worldBottomRight.x - worldTopLeft.x) / CELL_SIZE;
         int cellCountHOR = (worldBottomRight.y - worldTopLeft.y) / CELL_SIZE;
 
-        DrawTextureV(HED_bound.texture, (Vector2){.x = HED_bound.rectangle.x, .y = HED_bound.rectangle.y}, WHITE);
-        if (CheckCollisionPointRec(GetScreenToWorld2D(GetMousePosition(), camera), HED_bound.rectangle)) {
-            DrawRectangleLinesEx(HED_bound.rectangle, 10.0f, LIME);
-            Vector2 trinaglePointA = {.x = (HED_bound.rectangle.x + HED_bound.rectangle.width) - SCALE_SIGN_SIZE, .y = HED_bound.rectangle.y + HED_bound.rectangle.height};
-            Vector2 trinaglePointB = {.x = (HED_bound.rectangle.x + HED_bound.rectangle.width), .y = HED_bound.rectangle.y + HED_bound.rectangle.height};
-            Vector2 trinaglePointC = {.x = HED_bound.rectangle.x + HED_bound.rectangle.width, .y = (HED_bound.rectangle.y + HED_bound.rectangle.height) - SCALE_SIGN_SIZE};
-            DrawTriangle(trinaglePointA, trinaglePointB, trinaglePointC, LIME);
-            if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && IsKeyDown(KEY_LEFT_CONTROL)) {
-                if (CheckCollisionPointTriangle(GetScreenToWorld2D(GetMousePosition(), camera), trinaglePointA, trinaglePointB, trinaglePointC))
-                    scaleImage = true;
-                else
-                    moveImage = true;
-            }
-        }
-
-        if (scaleImage) {
-            HED_bound.rectangle.width = GetScreenToWorld2D(GetMousePosition(), camera).x - HED_bound.rectangle.x;
-            HED_bound.rectangle.height = GetScreenToWorld2D(GetMousePosition(), camera).y - HED_bound.rectangle.y;
-
-            if (HED_bound.rectangle.width < SCALE_SIGN_SIZE) HED_bound.rectangle.width = SCALE_SIGN_SIZE;
-            if (HED_bound.rectangle.height < SCALE_SIGN_SIZE) HED_bound.rectangle.height = SCALE_SIGN_SIZE;
-
-            if (HED_bound.rectangle.width > GetScreenWidth() - HED_bound.rectangle.x) HED_bound.rectangle.width = GetScreenWidth() - HED_bound.rectangle.x;
-            if (HED_bound.rectangle.height > GetScreenHeight() - HED_bound.rectangle.y) HED_bound.rectangle.height = GetScreenHeight() - HED_bound.rectangle.y;
-
-            HED_bound.texture.width = HED_bound.rectangle.width;
-            HED_bound.texture.height = HED_bound.rectangle.height;
-            if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) || IsKeyReleased(KEY_LEFT_CONTROL)) scaleImage = false;
-        }
-        if (moveImage && !scaleImage) {
-            Vector2 delta = GetMouseDelta();
-            delta = Vector2Scale(delta, -1.0f / camera.zoom);
-            HED_bound.rectangle.x -= delta.x;
-            HED_bound.rectangle.y -= delta.y;
-            if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) || IsKeyReleased(KEY_LEFT_CONTROL)) moveImage = false;
-        }
+        if(importImage) loadImage(&HED_bound, &camera, &scaleImage, &moveImage); 
 
         for (int i = 1; i < cellCountVER; i++) {
             float x = gridStartX + (i * CELL_SIZE);
@@ -179,7 +240,7 @@ int main(int argc, char **argv) {
 
             verticeCount_G = 0;
 
-            IFArray *ifArray = generateIdenticalFunctions(worldTopLeft, worldBottomRight);
+            IFArray *ifArray = generateIdenticalFunctions(worldTopLeft, worldBottomRight, identicalFunctionGap);
             int collidingPointCount = 0;
             Vector2 *collidingPoints = (Vector2 *)malloc(sizeof(Vector2));
             for (int i = 0; i < verticeIndex->verticeCount - 1; i++) {
@@ -238,7 +299,7 @@ int main(int argc, char **argv) {
             camera.target = Vector2Add(camera.target, delta);
             if (ifArray_D != NULL) free(ifArray_D->identicalFunctions);
             free(ifArray_D);
-            ifArray_D = generateIdenticalFunctions(worldTopLeft, worldBottomRight);
+            ifArray_D = generateIdenticalFunctions(worldTopLeft, worldBottomRight, identicalFunctionGap);
         }
         float wheel = GetMouseWheelMove();
         if (wheel != 0) {
@@ -247,12 +308,12 @@ int main(int argc, char **argv) {
             if (camera.zoom > 1) camera.zoom = 1;
             if (ifArray_D != NULL) free(ifArray_D->identicalFunctions);
             free(ifArray_D);
-            ifArray_D = generateIdenticalFunctions(worldTopLeft, worldBottomRight);
+            ifArray_D = generateIdenticalFunctions(worldTopLeft, worldBottomRight, identicalFunctionGap);
         }
         if (IsKeyPressed(KEY_SPACE)) {
             if (ifArray_D != NULL) free(ifArray_D->identicalFunctions);
             free(ifArray_D);
-            ifArray_D = generateIdenticalFunctions(worldTopLeft, worldBottomRight);
+            ifArray_D = generateIdenticalFunctions(worldTopLeft, worldBottomRight, identicalFunctionGap);
         }
     }
 
