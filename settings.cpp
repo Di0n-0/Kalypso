@@ -1,4 +1,4 @@
-//g++ -g -o settings settings.cpp -L/home/di0n/vcpkg/installed/x64-linux/lib -lglfw3 -lGLEW -lGL -limgui -lsoil -lm -lX11
+//g++ -g -o settings settings.cpp -L/home/di0n/vcpkg/installed/x64-linux/lib -lglfw3 -lGLEW -lGL -limgui -lImGuiFileDialog -lsoil -lcjson -lm -lX11
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <cstddef>
@@ -21,16 +21,18 @@ bool openedDialog, uploadImage = false;
 std::string filePathName = "";
 GLint imageTextureID = 0;
 GLint identicalFunctionGap = 50;
+GLint sensivity = 80;
 
 void GenerateJSON(){
     cJSON *root = cJSON_CreateObject();
 
     cJSON_AddStringToObject(root, "filePath", filePathName.c_str());
     cJSON_AddNumberToObject(root, "identicalFunctionGap", identicalFunctionGap);
+    cJSON_AddNumberToObject(root, "sensivity", sensivity);
 
     char *JSONstring = cJSON_Print(root);
     
-    FILE *file = fopen("settings.json", "w");
+    FILE *file = fopen("config/settings.json", "w");
     if (file == NULL) {
         fprintf(stderr, "Failed to create JSON file.\n");
         cJSON_Delete(root);
@@ -107,16 +109,19 @@ void RenderImGui() {
         if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey", ImGuiWindowFlags_NoCollapse, ImVec2(400, 400), ImVec2(WINDOW_WIDTH, (float)WINDOW_HEIGHT * 4 / 5))) {
             if (ImGuiFileDialog::Instance()->IsOk()) {
                 ImGui::SetWindowCollapsed(true);
-                filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
-                GenerateJSON();
+                filePathName = ImGuiFileDialog::Instance()->GetFilePathName(); 
                 imageTextureID = LoadTexture(filePathName.c_str());
-                uploadImage = true;
+                if(imageTextureID != 0) {
+                    GenerateJSON(); 
+                    uploadImage = true;
+                }
             }
             ImGuiFileDialog::Instance()->Close();
         }
         if(uploadImage){
             if (ImGui::Button("Remove Image", ImVec2(120, 25))) {
                 filePathName = "";
+                GenerateJSON(); 
                 uploadImage = false;
                 openedDialog = false;
             }
@@ -133,6 +138,7 @@ void RenderImGui() {
     ImGui::Separator();
     ImGui::Spacing();
     if(ImGui::SliderInt("Distance between consecutive identical functions", &identicalFunctionGap, 1.0f, 250.0f)) GenerateJSON();
+    if(ImGui::SliderInt("Sensivity of preprocessing", &sensivity, 1.0f, 255.0f)) GenerateJSON();
     ImGui::End();
 
     ImGui::Render();

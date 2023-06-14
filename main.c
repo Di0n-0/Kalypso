@@ -1,4 +1,4 @@
-//gcc -o main main.cpp -L/home/di0n/vcpkg/installed/x64-linux/lib -lraylib -lm -lX11
+//gcc -o main main.c -L/home/di0n/vcpkg/installed/x64-linux/lib -lraylib -lcjson -lm -lX11
 #include <raylib.h>
 #include <raymath.h>
 #include <memory.h>
@@ -31,7 +31,7 @@ typedef struct TextureBound {
 } TextureBound;
 
 int readJSON(char **filePath, int* identicalFunctionGap){
-    FILE *file = fopen("settings.json", "r");
+    FILE *file = fopen("config/settings.json", "r");
     if (file == NULL) {
         fprintf(stderr, "Failed to open JSON file.\n");
         return 1;
@@ -177,7 +177,7 @@ int main(int argc, char **argv) {
     TextureBound HED_bound;
     Texture2D HED_texture;
 
-    if(readJSON(&fileLocation, &identicalFunctionGap) != 1){
+    if(readJSON(&fileLocation, &identicalFunctionGap) == 0 && fileLocation != NULL){
         Image HED_image = LoadImage(fileLocation);
         free(fileLocation);
         fileLocation = NULL;
