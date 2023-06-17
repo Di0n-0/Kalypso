@@ -28,7 +28,7 @@ void GenerateJSON(){
 
     cJSON_AddStringToObject(root, "filePath", filePathName.c_str());
     cJSON_AddNumberToObject(root, "identicalFunctionGap", identicalFunctionGap);
-    cJSON_AddNumberToObject(root, "sensivity", sensivity);
+    cJSON_AddNumberToObject(root, "sensivity", 255 - sensivity);
 
     char *JSONstring = cJSON_Print(root);
     
@@ -138,7 +138,7 @@ void RenderImGui() {
     ImGui::Separator();
     ImGui::Spacing();
     if(ImGui::SliderInt("Distance between consecutive identical functions", &identicalFunctionGap, 1.0f, 250.0f)) GenerateJSON();
-    if(ImGui::SliderInt("Sensivity of preprocessing", &sensivity, 1.0f, 255.0f)) GenerateJSON();
+    if(ImGui::SliderInt("Sensivity of preprocessing", &sensivity, 0.0f, 255.0f)) GenerateJSON();
     ImGui::End();
 
     ImGui::Render();
