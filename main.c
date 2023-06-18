@@ -1,4 +1,4 @@
-//gcc -o main main.c -L/home/di0n/vcpkg/installed/x64-linux/lib -lraylib -lcjson -lm -lX11
+//gcc -o main main.c -L/home/di0n/vcpkg/installed/x64-linux/lib -lraylib -lcjson -lm -lX11 -Wall
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>

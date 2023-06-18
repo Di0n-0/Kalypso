@@ -1,14 +1,16 @@
-//g++ -g -o settings settings.cpp -L/home/di0n/vcpkg/installed/x64-linux/lib -lglfw3 -lGLEW -lGL -limgui -lImGuiFileDialog -lsoil -lcjson -lm -lX11
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
+// g++ -g -o settings settings.cpp -I/usr/include/python3.10 -L/home/di0n/vcpkg/installed/x64-linux/lib -lglfw3 -lGLEW -lGL -limgui -lImGuiFileDialog -lsoil -lcjson -lpython3.10 -lm -lX11 -Wall
 #include <cstddef>
 #include <cstdio>
-#include <imgui.h>
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
+#include <fstream>
+#include <sstream>
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
 #include <ImGuiFileDialog.h>
 #include <SOIL/SOIL.h>
 #include <cjson/cJSON.h>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 
 // GLFW3 window size
 const int WINDOW_WIDTH = 1200;
@@ -23,7 +25,22 @@ GLint imageTextureID = 0;
 GLint identicalFunctionGap = 50;
 GLint sensivity = 80;
 
-void GenerateJSON(){
+std::string saveState = "Not Saved";
+ImVec4 saveColor(1, 0, 0, 1);
+
+int Preprocess() {
+    std::string command = "python3 preprocess.py";
+    int exitCode = system(command.c_str());
+    if (exitCode != 0) {
+        throw std::runtime_error("Python script execution failed.");
+    }
+
+    saveState = "Saved";
+    saveColor = ImVec4(0, 1, 0, 1);
+    return 0;
+}
+
+void GenerateJSON() {
     cJSON *root = cJSON_CreateObject();
 
     cJSON_AddStringToObject(root, "filePath", filePathName.c_str());
@@ -31,10 +48,10 @@ void GenerateJSON(){
     cJSON_AddNumberToObject(root, "sensivity", 255 - sensivity);
 
     char *JSONstring = cJSON_Print(root);
-    
+
     FILE *file = fopen("config/settings.json", "w");
     if (file == NULL) {
-        fprintf(stderr, "Failed to create JSON file.\n");
+        fprintf(stderr, "[ERORR] Failed to create JSON file.\n");
         cJSON_Delete(root);
         free(JSONstring);
     }
@@ -49,14 +66,17 @@ void GenerateJSON(){
     cJSON_Delete(root);
     free(JSONstring);
 
-    printf("JSON file created successfully.\n");
+    printf("[INFO] JSON file created successfully.\n");
+    if (filePathName == "") {
+        saveState = "Saved";
+        saveColor = ImVec4(0, 1, 0, 1);
+    }
 }
 
-GLuint LoadTexture(const char* imagePath) {
+GLuint LoadTexture(const char *imagePath) {
     int width, height, channels;
-    unsigned char* image = SOIL_load_image(imagePath, &width, &height, &channels, SOIL_LOAD_RGBA);
-    if (!image)
-    {
+    unsigned char *image = SOIL_load_image(imagePath, &width, &height, &channels, SOIL_LOAD_RGBA);
+    if (!image) {
         fprintf(stderr, "Failed to load image: %s\n", imagePath);
         return 0;
     }
@@ -71,7 +91,8 @@ GLuint LoadTexture(const char* imagePath) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, image);
     glGenerateMipmap(GL_TEXTURE_2D);
 
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -80,11 +101,45 @@ GLuint LoadTexture(const char* imagePath) {
     return textureID;
 }
 
-// Function to initialize ImGui
-void InitializeImGui(GLFWwindow* window) {
+int ReadJSON(){
+    std::ifstream jsonFile("config/settings.json");
+    std::stringstream buffer;
+    buffer << jsonFile.rdbuf();
+    std::string json_data = buffer.str();
+
+    cJSON* root = cJSON_Parse(json_data.c_str());
+
+    cJSON* a_value = cJSON_GetObjectItemCaseSensitive(root, "filePath");
+    cJSON* b_value = cJSON_GetObjectItemCaseSensitive(root, "identicalFunctionGap");
+    cJSON* c_value = cJSON_GetObjectItemCaseSensitive(root, "sensivity");
+
+    if (a_value != nullptr && cJSON_IsString(a_value) &&
+        b_value != nullptr && cJSON_IsNumber(b_value) &&
+        c_value != nullptr && cJSON_IsNumber(c_value)) {
+        std::string a = a_value->valuestring;
+        int b = b_value->valueint;
+        int c = c_value->valueint;
+
+        filePathName = a;
+        identicalFunctionGap = b;
+        sensivity = 255 - c;
+
+        if(filePathName != ""){
+            imageTextureID = LoadTexture(filePathName.c_str());
+            if(imageTextureID != 0) uploadImage = true;
+        }
+    }
+
+    cJSON_Delete(root);
+    
+    return 0;
+}
+
+void InitializeImGui(GLFWwindow *window) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGuiIO& io = ImGui::GetIO();
+    (void)io;
 
     ImGui::StyleColorsClassic();
 
@@ -92,7 +147,6 @@ void InitializeImGui(GLFWwindow* window) {
     ImGui_ImplOpenGL3_Init("#version 330");
 }
 
-// Function to render ImGui content
 void RenderImGui() {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -100,28 +154,46 @@ void RenderImGui() {
 
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(width_custom, height_custom));
-    ImGui::Begin("User Dependencies", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
+    ImGui::Begin(
+        "User Dependencies", nullptr,
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
     if (ImGui::Button("Upload Image", ImVec2(120, 25))) {
-        ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File", ".png,.jpeg,.tga,.bmp,.psd,.tga,.hdr,.pic,.pnm,.dds,.pvr,.pkm", ".");
+        saveState = "Not Saved";
+        saveColor = ImVec4(1, 0, 0, 1);
+        ImGuiFileDialog::Instance()->OpenDialog(
+            "ChooseFileDlgKey", "Choose File",
+            ".png,.jpeg,.tga,.bmp,.psd,.tga,.hdr,.pic,.pnm,.dds,.pvr,.pkm",
+            ".");
         openedDialog = true;
     }
-    if(openedDialog) {
-        if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey", ImGuiWindowFlags_NoCollapse, ImVec2(400, 400), ImVec2(WINDOW_WIDTH, (float)WINDOW_HEIGHT * 4 / 5))) {
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(WINDOW_WIDTH - 128);
+    if (ImGui::Button("Save", ImVec2(120, 25))) {
+        saveState = "Saving ...";
+        saveColor = ImVec4(1, 0, 0, 1);
+        GenerateJSON();
+        if (filePathName != "") Preprocess();
+    }
+    if (openedDialog || uploadImage) {
+        if (ImGuiFileDialog::Instance()->Display(
+                "ChooseFileDlgKey", ImGuiWindowFlags_NoCollapse,
+                ImVec2(400, 400),
+                ImVec2(WINDOW_WIDTH, (float)WINDOW_HEIGHT * 4 / 5))) {
             if (ImGuiFileDialog::Instance()->IsOk()) {
                 ImGui::SetWindowCollapsed(true);
-                filePathName = ImGuiFileDialog::Instance()->GetFilePathName(); 
+                filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
                 imageTextureID = LoadTexture(filePathName.c_str());
-                if(imageTextureID != 0) {
-                    GenerateJSON(); 
+                if (imageTextureID != 0) {
                     uploadImage = true;
                 }
             }
             ImGuiFileDialog::Instance()->Close();
         }
-        if(uploadImage){
+        if (uploadImage) {
             if (ImGui::Button("Remove Image", ImVec2(120, 25))) {
+                saveState = "Not Saved";
+                saveColor = ImVec4(1, 0, 0, 1);
                 filePathName = "";
-                GenerateJSON(); 
                 uploadImage = false;
                 openedDialog = false;
             }
@@ -132,13 +204,24 @@ void RenderImGui() {
     ImGui::Separator();
     ImGui::Spacing();
     ImGui::Text("%s", filePathName.c_str());
-    if(uploadImage) ImGui::Image((void*)(intptr_t)imageTextureID, ImVec2(400, 300));
+    if (uploadImage) ImGui::Image((void*)(intptr_t)imageTextureID, ImVec2(400, 300));
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Separator();
     ImGui::Spacing();
-    if(ImGui::SliderInt("Distance between consecutive identical functions", &identicalFunctionGap, 1.0f, 250.0f)) GenerateJSON();
-    if(ImGui::SliderInt("Sensivity of preprocessing", &sensivity, 0.0f, 255.0f)) GenerateJSON();
+    if (ImGui::SliderInt("Distance between consecutive identical functions",
+                         &identicalFunctionGap, 1.0f, 250.0f)) {
+        saveState = "Not Saved";
+        saveColor = ImVec4(1, 0, 0, 1);
+    }
+    if (uploadImage) {
+        if (ImGui::SliderInt("Sensivity of preprocessing", &sensivity, 0.0f,
+                             255.0f)) {
+            saveState = "Not Saved";
+            saveColor = ImVec4(1, 0, 0, 1);
+        }
+    }
+    ImGui::TextColored(saveColor, "%s", saveState.c_str());
     ImGui::End();
 
     ImGui::Render();
@@ -146,11 +229,9 @@ void RenderImGui() {
 }
 
 int main() {
-    // Initialize GLFW
     if (!glfwInit()) return -1;
 
-    // Create a GLFW window
-    GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Settings", NULL, NULL);
+    GLFWwindow *window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Settings", NULL, NULL);
     if (!window) {
         glfwTerminate();
         return -1;
@@ -158,27 +239,21 @@ int main() {
 
     glfwMakeContextCurrent(window);
 
-    // Initialize GLEW
     if (glewInit() != GLEW_OK) return -1;
-
-    // Set up ImGui
     InitializeImGui(window);
 
-    // Main loop
+    ReadJSON();
+
     while (!glfwWindowShouldClose(window)) {
-        // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT);
         glfwGetWindowSize(window, &width_custom, &height_custom);
 
-        // Render ImGui content
         RenderImGui();
 
-        // Swap buffers and poll events
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    // Cleanup
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
@@ -186,4 +261,3 @@ int main() {
 
     return 0;
 }
-
