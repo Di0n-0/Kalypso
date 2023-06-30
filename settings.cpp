@@ -1,4 +1,4 @@
-// g++ -g -o settings settings.cpp -I/usr/include/python3.10 -L/home/di0n/vcpkg/installed/x64-linux/lib -lglfw3 -lGLEW -lGL -limgui -lImGuiFileDialog -lsoil -lcjson -lpython3.10 -lm -lX11 -Wall
+// g++ -g -o settings settings.cpp -L/home/di0n/vcpkg/installed/x64-linux/lib -lglfw3 -lGLEW -lGL -limgui -lImGuiFileDialog -lsoil -lcjson -lm -lX11 -Wall
 #include <cstddef>
 #include <cstdio>
 #include <fstream>
