@@ -37,6 +37,8 @@ def preprocess():
         sensitivity = data["sensitivity"]
 
     img_original = cv2.imread(filePath)
+    img_replica = img_original.copy()
+    cv2.imwrite("res/replica.png", img_replica)
     (H, W) = img_original.shape[:2]
 
     print("INFO: Performing Canny edge detection...")
@@ -105,7 +107,7 @@ def preprocess():
     cv2.imwrite("res/output_hed_contours.png", img_copy)
 
     with open("config/settings.json", "w") as json_file:
-        data["filePath"] = filePath
+        data["filePath"] = "res/replica.png"
         json.dump(data, json_file)
 
     print("INFO: Applying M-LSD...")
