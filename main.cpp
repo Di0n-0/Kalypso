@@ -1,5 +1,4 @@
 //g++ -g -o main main.cpp -L/home/di0n/vcpkg/installed/x64-linux/lib -lraylib -lgmp -lcjson -lm -lX11 -Wall -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment
-
 extern "C"{
 #include <stdio.h>
 #include <stdlib.h>
@@ -219,75 +218,77 @@ int readJSON(char **filePath, int *identicalFunctionGap, Vertice **contour_head,
     if (identicalFunctionGapItem && identicalFunctionGapItem->type == cJSON_Number) {*identicalFunctionGap = identicalFunctionGapItem->valueint;}
 
     if(strcmp(*filePath, "") != 0) {
+        const char *type_names[2][2] = {{"contour_data_hed", "points_hed"}, {"contour_data_m-lsd", "points_m-lsd"}};
+        for(int m = 0; m < 2; m++) {
+            cJSON *contours_item = cJSON_GetObjectItem(root, type_names[m][0]);
+            if (contours_item == NULL || contours_item->type != cJSON_Array) {printf("Invalid or missing 'contour_data' array in the JSON.\n"); cJSON_Delete(root); return 1;}
+            
+            int contour_count = cJSON_GetArraySize(contours_item);
 
-        cJSON *contours_item = cJSON_GetObjectItem(root, "contour_data");
-        if (contours_item == NULL || contours_item->type != cJSON_Array) {printf("Invalid or missing 'contour_data' array in the JSON.\n"); cJSON_Delete(root); return 1;}
-        
-        int contour_count = cJSON_GetArraySize(contours_item);
+            Image temp_image = LoadImage(*filePath);
+            float temp_image_width = temp_image.width;
+            float temp_image_height = temp_image.height;
+            UnloadImage(temp_image);
 
-        Image temp_image = LoadImage(*filePath);
-        float temp_image_width = temp_image.width;
-        float temp_image_height = temp_image.height;
-        UnloadImage(temp_image);
+            IFArray *ifArray = generateIdenticalFunctions((Vector2){.x = 0, .y = -temp_image_height}, (Vector2){.x = temp_image_width, .y = 0}, *identicalFunctionGap); 
 
-        IFArray *ifArray = generateIdenticalFunctions((Vector2){.x = 0, .y = -temp_image_height}, (Vector2){.x = temp_image_width, .y = 0}, *identicalFunctionGap); 
+            for(int i = 0; i < contour_count; i++){
+                cJSON *contour_object = cJSON_GetArrayItem(contours_item, i);
+                cJSON *points_array = cJSON_GetObjectItem(contour_object, type_names[m][1]);
 
-        for(int i = 0; i < contour_count; i++){
-            cJSON *contour_object = cJSON_GetArrayItem(contours_item, i);
-            cJSON *points_array = cJSON_GetObjectItem(contour_object, "points");
+                int point_count = cJSON_GetArraySize(points_array);
+                Vector2 *contour_verticeData = (Vector2 *)malloc(point_count * sizeof(Vector2));
 
-            int point_count = cJSON_GetArraySize(points_array);
-            Vector2 *contour_verticeData = (Vector2 *)malloc(point_count * sizeof(Vector2));
+                for(int j = 0; j < point_count; j++){
+                    cJSON *point_array = cJSON_GetArrayItem(points_array, j);
+                    cJSON *point = cJSON_GetArrayItem(point_array, 0);
 
-            for(int j = 0; j < point_count; j++){
-                cJSON *point_array = cJSON_GetArrayItem(points_array, j);
-                cJSON *point = cJSON_GetArrayItem(point_array, 0);
-
-                contour_verticeData[j] = (Vector2){.x = (float)cJSON_GetArrayItem(point, 0)->valueint, .y = (float)cJSON_GetArrayItem(point, 1)->valueint - temp_image_height};
-            }
-            int collidingPointCount = 0;
-            Vector2 *collidingPoints = (Vector2 *)malloc(sizeof(Vector2));
-            if(point_count == 1){
-                for(int j = 0; j < ifArray->identicalFunctionCount; j++){
-                    if(CheckCollisionPointLine(contour_verticeData[0], ifArray->identicalFunctions[j].start, ifArray->identicalFunctions[j].end, 10)){
-                        collidingPoints[collidingPointCount] = contour_verticeData[0];
-                        collidingPointCount++;
-                        collidingPoints = (Vector2 *)realloc(collidingPoints, (collidingPointCount + 1) * sizeof(Vector2));
-                    }
+                    contour_verticeData[j] = (Vector2){.x = (float)cJSON_GetArrayItem(point, 0)->valueint, .y = (float)cJSON_GetArrayItem(point, 1)->valueint - temp_image_height};
                 }
-            }else{
-                for (int j = 0; j < point_count - 1; j++) {
-                    for (int k = 0; k < ifArray->identicalFunctionCount; k++) {
-                        if (CheckCollisionLines(contour_verticeData[j], contour_verticeData[j + 1], ifArray->identicalFunctions[k].start, ifArray->identicalFunctions[k].end, &collidingPoints[collidingPointCount])) {
+                int collidingPointCount = 0;
+                Vector2 *collidingPoints = (Vector2 *)malloc(sizeof(Vector2));
+                if(point_count == 1){
+                    for(int j = 0; j < ifArray->identicalFunctionCount; j++){
+                        if(CheckCollisionPointLine(contour_verticeData[0], ifArray->identicalFunctions[j].start, ifArray->identicalFunctions[j].end, 10)){
+                            collidingPoints[collidingPointCount] = contour_verticeData[0];
                             collidingPointCount++;
                             collidingPoints = (Vector2 *)realloc(collidingPoints, (collidingPointCount + 1) * sizeof(Vector2));
                         }
                     }
-                }
-            } 
+                }else{
+                    for (int j = 0; j < point_count - 1; j++) {
+                        for (int k = 0; k < ifArray->identicalFunctionCount; k++) {
+                            if (CheckCollisionLines(contour_verticeData[j], contour_verticeData[j + 1], ifArray->identicalFunctions[k].start, ifArray->identicalFunctions[k].end, &collidingPoints[collidingPointCount])) {
+                                collidingPointCount++;
+                                collidingPoints = (Vector2 *)realloc(collidingPoints, (collidingPointCount + 1) * sizeof(Vector2));
+                            }
+                        }
+                    }
+                } 
 
-            Vertice *newVertice = (Vertice *)malloc(sizeof(Vertice));
-            newVertice->verticeData = (Vector2 *)malloc(point_count * sizeof(Vector2));
-            memcpy(newVertice->verticeData, contour_verticeData, point_count * sizeof(Vector2));
-            newVertice->verticeCount = point_count;
-            newVertice->next = (*verticeIndex)->next;
-            newVertice->intersectionPoints = (Vector2 *)malloc(collidingPointCount * sizeof(Vector2));
-            memcpy(newVertice->intersectionPoints, collidingPoints, collidingPointCount * sizeof(Vector2));
-            newVertice->intersectionPointCount = collidingPointCount;
-            newVertice->indicies_trig = NULL;
-            newVertice->triangle_count = 0;
+                Vertice *newVertice = (Vertice *)malloc(sizeof(Vertice));
+                newVertice->verticeData = (Vector2 *)malloc(point_count * sizeof(Vector2));
+                memcpy(newVertice->verticeData, contour_verticeData, point_count * sizeof(Vector2));
+                newVertice->verticeCount = point_count;
+                newVertice->next = (*verticeIndex)->next;
+                newVertice->intersectionPoints = (Vector2 *)malloc(collidingPointCount * sizeof(Vector2));
+                memcpy(newVertice->intersectionPoints, collidingPoints, collidingPointCount * sizeof(Vector2));
+                newVertice->intersectionPointCount = collidingPointCount;
+                newVertice->indicies_trig = NULL;
+                newVertice->triangle_count = 0;
 
-            delaunay_trig(&newVertice);
+                delaunay_trig(&newVertice);
 
-            (*verticeIndex)->next = newVertice;
-            (*verticeIndex) = newVertice;
+                (*verticeIndex)->next = newVertice;
+                (*verticeIndex) = newVertice;
 
-            free(contour_verticeData);
-            free(collidingPoints);
+                free(contour_verticeData);
+                free(collidingPoints);
 
+            }
+            free(ifArray->identicalFunctions);
+            free(ifArray);
         }
-        free(ifArray->identicalFunctions);
-        free(ifArray);
     }
 
     cJSON_Delete(root);
@@ -458,11 +459,11 @@ int main(int argc, char **argv) {
                 DrawLineStrip(current_D->verticeData, current_D->verticeCount, GREEN);
 
                 if (IsKeyDown(KEY_SPACE)) {
-                    for (int i = 0; i < current_D->triangle_count; i++){
-                        DrawTriangleLines(current_D->intersectionPoints[current_D->indicies_trig[i][0]], current_D->intersectionPoints[current_D->indicies_trig[i][1]], current_D->intersectionPoints[current_D->indicies_trig[i][2]], ORANGE);
-                    }
                     for (int i = 0; i < current_D->intersectionPointCount; i++) {
                         DrawCircleV(current_D->intersectionPoints[i], 5, BLUE);
+                    }
+                    for (int i = 0; i < current_D->triangle_count; i++){
+                        DrawTriangleLines(current_D->intersectionPoints[current_D->indicies_trig[i][0]], current_D->intersectionPoints[current_D->indicies_trig[i][1]], current_D->intersectionPoints[current_D->indicies_trig[i][2]], ORANGE);
                     }
                 }
                 current_D = current_D->next;

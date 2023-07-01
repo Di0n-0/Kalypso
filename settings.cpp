@@ -1,4 +1,4 @@
-// g++ -g -o settings settings.cpp -L/home/di0n/vcpkg/installed/x64-linux/lib -lglfw3 -lGLEW -lGL -limgui -lImGuiFileDialog -lsoil -lcjson -lm -lX11 -Wall
+//g++ -g -o settings settings.cpp -L/home/di0n/vcpkg/installed/x64-linux/lib -lglfw3 -lGLEW -lGL -limgui -lImGuiFileDialog -lsoil -lcjson -lm -lX11 -Wall -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment
 #include <cstddef>
 #include <cstdio>
 #include <fstream>
@@ -23,7 +23,7 @@ bool openedDialog, uploadImage = false;
 std::string filePathName = "";
 GLint imageTextureID = 0;
 GLint identicalFunctionGap = 50;
-GLint sensivity = 80;
+GLint sensitivity = 80;
 
 std::string saveState = "Not Saved";
 ImVec4 saveColor(1, 0, 0, 1);
@@ -45,7 +45,7 @@ void GenerateJSON() {
 
     cJSON_AddStringToObject(root, "filePath", filePathName.c_str());
     cJSON_AddNumberToObject(root, "identicalFunctionGap", identicalFunctionGap);
-    cJSON_AddNumberToObject(root, "sensivity", 255 - sensivity);
+    cJSON_AddNumberToObject(root, "sensitivity", 255 - sensitivity);
 
     char *JSONstring = cJSON_Print(root);
 
@@ -111,7 +111,7 @@ int ReadJSON(){
 
     cJSON* a_value = cJSON_GetObjectItemCaseSensitive(root, "filePath");
     cJSON* b_value = cJSON_GetObjectItemCaseSensitive(root, "identicalFunctionGap");
-    cJSON* c_value = cJSON_GetObjectItemCaseSensitive(root, "sensivity");
+    cJSON* c_value = cJSON_GetObjectItemCaseSensitive(root, "sensitivity");
 
     if (a_value != nullptr && cJSON_IsString(a_value) &&
         b_value != nullptr && cJSON_IsNumber(b_value) &&
@@ -122,7 +122,7 @@ int ReadJSON(){
 
         filePathName = a;
         identicalFunctionGap = b;
-        sensivity = 255 - c;
+        sensitivity = 255 - c;
 
         if(filePathName != ""){
             imageTextureID = LoadTexture(filePathName.c_str());
@@ -215,7 +215,7 @@ void RenderImGui() {
         saveColor = ImVec4(1, 0, 0, 1);
     }
     if (uploadImage) {
-        if (ImGui::SliderInt("Sensivity of preprocessing", &sensivity, 0.0f,
+        if (ImGui::SliderInt("Sensitivity of preprocessing", &sensitivity, 0.0f,
                              255.0f)) {
             saveState = "Not Saved";
             saveColor = ImVec4(1, 0, 0, 1);
